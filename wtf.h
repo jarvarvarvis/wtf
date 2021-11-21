@@ -66,8 +66,6 @@ wtf_test_t *wtf_test_new(char *name) {
 	if (expr) {							\
 		wtf_test_suite_current_success(suite);			\
 	} else {							\
-		printf("    Test %s: Assertion %s failed.\n",		\
-		       wtf_test_suite_current(suite)->name, wtf_str(expr)); \
 		wtf_test_suite_current_failure(suite);			\
 	}
 

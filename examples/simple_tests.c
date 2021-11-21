@@ -15,6 +15,19 @@ wtf_suite(maths) {
 
 		wtf_assert_eq(result, expected);
 	}
+
+	wtf_suite_test(multiplication) {
+		int result = a * (b - 5);
+		int expected = 280;
+
+		wtf_assert_eq(result, expected);
+	}
+}
+
+wtf_suite(null) {
+	wtf_suite_test(is_null) {
+		wtf_assert_null(NULL);
+	}
 }
 
 wtf_suite(strings) {
@@ -31,10 +44,10 @@ wtf_main {
 	wtf_init();
 
 	wtf_register_suite(maths);
+	wtf_register_suite(null);
 	wtf_register_suite(strings);
 
         wtf_run_suites();
-	wtf_log_results();
 
 	wtf_destroy();
 }

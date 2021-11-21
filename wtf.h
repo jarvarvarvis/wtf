@@ -62,20 +62,23 @@ wtf_test_t *wtf_test_new(char *name) {
 	return test;
 }
 
-#define wtf_assert(expr)				\
-	if (expr)					\
-		wtf_test_suite_current_success(suite);	\
-	else						\
-		wtf_test_suite_current_failure(suite);
+#define wtf_assert(expr)						\
+	if (expr) {							\
+		wtf_test_suite_current_success(suite);			\
+	} else {							\
+		printf("    Test %s: Assertion %s failed.\n",		\
+		       wtf_test_suite_current(suite)->name, wtf_str(expr)); \
+		wtf_test_suite_current_failure(suite);			\
+	}
 
-#define wtf_assert_success()               wtf_test_suite_current_success(suite);
-#define wtf_assert_failure()               wtf_test_suite_current_failure(suite);
+#define wtf_assert_success()               wtf_test_suite_current_success(suite)
+#define wtf_assert_failure()               wtf_test_suite_current_failure(suite)
 
 #define wtf_assert_eq(a, b)                wtf_assert(a == b)
 #define wtf_assert_neq(a, b)               wtf_assert(a != b)
 
-#define wtf_assert_null(expr)              wtf_assert_eq(expr, NULL)
-#define wtf_assert_notnull(expr)           wtf_assert_neq(expr, NULL)
+#define wtf_assert_null(expr)              wtf_assert(!expr)
+#define wtf_assert_notnull(expr)           wtf_assert(expr)
 
 #define wtf_assert_streq(a, b)             wtf_assert(strcmp(a, b) == 0)
 #define wtf_assert_strneq(a, b)            wtf_assert(strcmp(a, b) != 0)
@@ -204,6 +207,30 @@ void wtf_context_add_suite(wtf_context_t *ctx, wtf_test_suite_t *suite) {
 	ctx->suites_count++;
 }
 
+void wtf_context_run_suites(wtf_context_t *ctx, int *success, int *failure) {
+        if (ctx->suites_count == 1) {
+                printf("Running 1 suite...\n");
+	}
+        else {
+                printf("Running %d suites...\n", ctx->suites_count);
+	}
+
+        for (int i = 0; i < ctx->suites_count; ++i) {
+                printf("Suite '%s'\n", ctx->suites[i]->suite_name);
+
+                (*ctx->suites[i]->runner)(ctx->suites[i]);
+
+                for (int j = 0; j < ctx->suites[i]->tests_count; ++j) {
+                        wtf_test_t *test = ctx->suites[i]->tests[j];
+                        printf("    [%s] Test '%s'\n",
+                               wtf_test_result_string(test->result),
+                               test->name);
+                        wtf_test_result_write_counter(test->result, success, failure);
+                }
+                printf("\n");
+        }
+}
+
 #define wtf_init()				\
 	wtf_context_t *ctx = wtf_context_new()
 
@@ -211,33 +238,12 @@ void wtf_context_add_suite(wtf_context_t *ctx, wtf_test_suite_t *suite) {
 	wtf_test_suite_t *wtf_test_suite_##name =			\
 		wtf_test_suite_new(wtf_str(name), &test_suite_##name);	\
 	wtf_context_add_suite(ctx, wtf_test_suite_##name)
-	
-#define wtf_run_suites()						\
-	if (ctx->suites_count == 1)					\
-		printf("Running %d suite...\n", ctx->suites_count);	\
-	else								\
-		printf("Running %d suites...\n", ctx->suites_count);	\
-	for (int i = 0; i < ctx->suites_count; ++i) {			\
-		(*ctx->suites[i]->runner)(ctx->suites[i]);		\
-	}
 
-#define wtf_log_results()						\
+#define wtf_run_suites()						\
 	int success = 0, failure = 0;					\
-	for (int i = 0; i < ctx->suites_count; ++i) {			\
-		printf("Suite '%s'\n", ctx->suites[i]->suite_name);	\
-		for (int j = 0; j < ctx->suites[i]->tests_count; ++j) {	\
-			wtf_test_t *test = ctx->suites[i]->tests[j];	\
-			printf("    [%s] Test '%s'\n",			\
-			       wtf_test_result_string(test->result),	\
-			       test->name);				\
-			wtf_test_result_write_counter(test->result,	\
-						      &success,		\
-						      &failure);	\
-		}							\
-		printf("\n");						\
-	}								\
+	wtf_context_run_suites(ctx, &success, &failure);		\
 	printf("Successful: %d, Failed: %d, Total: %d\n",		\
-	       success, failure, success + failure);
+	       success, failure, success + failure)
 
 #define wtf_destroy() \
 	wtf_context_destroy(ctx)

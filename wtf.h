@@ -51,14 +51,27 @@ void wtf_test_result_write_counter(wtf_test_result_t result, int *success, int *
 typedef struct {
 	char *name;
 	wtf_test_result_t result;
+
+	unsigned int successful_assertions;
+	unsigned int failed_assertions_count;
+
+	size_t failed_assertions_cap; 
+	char **failed_assertions;
 } wtf_test_t;
+
+#define WTF_TEST_ASSERTIONS_CAP_INCREMENT 20
 
 wtf_test_t *wtf_test_new(char *name) {
 	wtf_test_t *test = (wtf_test_t *)malloc(sizeof(wtf_test_t));
 
 	test->name = name;
 	test->result = WTF_TEST_RESULT_UNDEFINED;
+	test->successful_assertions = 0;
+	test->failed_assertions_count = 0;
 
+	test->failed_assertions_cap = WTF_TEST_ASSERTIONS_CAP_INCREMENT;
+	test->failed_assertions = (char **)malloc(test->failed_assertions_cap * sizeof(char *));
+        
 	return test;
 }
 
@@ -66,7 +79,7 @@ wtf_test_t *wtf_test_new(char *name) {
 	if (expr) {							\
 		wtf_test_suite_current_success(suite);			\
 	} else {							\
-		wtf_test_suite_current_failure(suite);			\
+		wtf_test_suite_current_failure(suite, wtf_str(expr));	\
 	}
 
 #define wtf_assert_success()               wtf_test_suite_current_success(suite)
@@ -96,11 +109,16 @@ struct wtf_test_suite;
 
 typedef void (*wtf_test_suite_runner_t)(struct wtf_test_suite *);
 
+typedef void (*wtf_test_suite_method_t)(void);
+
 struct wtf_test_suite {
 	char *suite_name;
   
 	unsigned int tests_count;
 	wtf_test_t **tests;
+
+	wtf_test_suite_method_t before_each;
+	wtf_test_suite_method_t after_each;
 
 	wtf_test_suite_runner_t runner;
 };
@@ -114,6 +132,10 @@ wtf_test_suite_t *wtf_test_suite_new(char *suite_name, wtf_test_suite_runner_t r
 	suite->tests = (wtf_test_t **)malloc(WTF_TESTS_PER_SUITE * sizeof(wtf_test_t *));
 	suite->suite_name = suite_name;
 	suite->runner = runner;
+
+	// Initialize before and after each to NULL when creating a new suite.
+	suite->before_each = NULL;
+	suite->after_each = NULL;
 
 	return suite;
 }
@@ -148,22 +170,50 @@ wtf_test_t *wtf_test_suite_current(wtf_test_suite_t *suite) {
 
 void wtf_test_suite_current_success(wtf_test_suite_t *suite) {
 	wtf_test_t *test = wtf_test_suite_current(suite);
+	test->successful_assertions++;
+
 	if (test->result != WTF_TEST_RESULT_FAILURE) {
 		test->result = WTF_TEST_RESULT_SUCCESS;
 	}
 }
 
-void wtf_test_suite_current_failure(wtf_test_suite_t *suite) {
+void wtf_test_suite_current_failure(wtf_test_suite_t *suite, char *assertion) {
 	wtf_test_t *test = wtf_test_suite_current(suite);
+	if (test->failed_assertions_count >= test->failed_assertions_cap) {
+		test->failed_assertions_cap += WTF_TEST_ASSERTIONS_CAP_INCREMENT;
+		test->failed_assertions = (char **)realloc(test->failed_assertions,
+							   test->failed_assertions_cap * sizeof(char *));
+	}
+	test->failed_assertions[test->failed_assertions_count] = assertion;
+
+	test->failed_assertions_count++;
+
 	test->result = WTF_TEST_RESULT_FAILURE;
 }
 
 #define wtf_suite(name)					\
 	void test_suite_##name(wtf_test_suite_t *suite)
 
+#define wtf_callfp_if_not_null(call) \
+	if (call) (*call)()
+
 #define wtf_suite_test(name)					\
+	if (suite->tests_count != 0) {				\
+		wtf_callfp_if_not_null(suite->after_each);	\
+	}							\
 	wtf_test_t *test_##name = wtf_test_new(wtf_str(name));	\
-	wtf_test_suite_add_test(suite, test_##name);
+	wtf_test_suite_add_test(suite, test_##name);		\
+	wtf_callfp_if_not_null(suite->before_each);
+
+
+
+///// wtf Test Suites - Before and After Each /////
+
+#define wtf_suite_before_each(name) \
+	void test_suite_##name##_before_each()
+
+#define wtf_suite_after_each(name) \
+	void test_suite_##name##_after_each()
 
 
 
@@ -183,7 +233,7 @@ wtf_context_t *wtf_context_new() {
 	wtf_context_t *ctx = (wtf_context_t *)malloc(sizeof(wtf_context_t));
 
 	ctx->suites_count = 0;
-	ctx->suites = (wtf_test_suite_t **)calloc(WTF_SUITES_PER_CONTEXT,
+	ctx->suites = (wtf_test_suite_t **)malloc(WTF_SUITES_PER_CONTEXT *
 						  sizeof(wtf_test_suite_t *));
 
 	return ctx;
@@ -220,9 +270,24 @@ void wtf_context_run_suites(wtf_context_t *ctx, int *success, int *failure) {
 
                 for (int j = 0; j < ctx->suites[i]->tests_count; ++j) {
                         wtf_test_t *test = ctx->suites[i]->tests[j];
-                        printf("    [%s] Test '%s'\n",
+		
+			float assert_success_percentage =
+				(float)test->successful_assertions /
+				(test->successful_assertions + test->failed_assertions_count) * 100;
+
+                        printf("    [%s] Test '%s' (%.2f %%)\n",
                                wtf_test_result_string(test->result),
-                               test->name);
+                               test->name,
+			       assert_success_percentage
+			);
+
+			if (test->failed_assertions_count > 0) {
+				printf("        Failed:\n");
+				for (int k = 0; k < test->failed_assertions_count; ++k) {
+					printf("        - %s\n", test->failed_assertions[k]);
+				}
+			}
+
                         wtf_test_result_write_counter(test->result, success, failure);
                 }
                 printf("\n");
@@ -236,6 +301,12 @@ void wtf_context_run_suites(wtf_context_t *ctx, int *success, int *failure) {
 	wtf_test_suite_t *wtf_test_suite_##name =			\
 		wtf_test_suite_new(wtf_str(name), &test_suite_##name);	\
 	wtf_context_add_suite(ctx, wtf_test_suite_##name)
+
+#define wtf_register_before_each(name) \
+	wtf_test_suite_##name->before_each = test_suite_##name##_before_each
+
+#define wtf_register_after_each(name) \
+	wtf_test_suite_##name->after_each = test_suite_##name##_after_each
 
 #define wtf_run_suites()						\
 	int success = 0, failure = 0;					\

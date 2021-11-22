@@ -194,16 +194,19 @@ void wtf_test_suite_current_failure(wtf_test_suite_t *suite, char *assertion) {
 #define wtf_suite(name)					\
 	void test_suite_##name(wtf_test_suite_t *suite)
 
-#define wtf_callfp_if_not_null(call) \
-	if (call) (*call)()
+void wtf_call_suite_method_if_not_null(wtf_test_suite_method_t method) {
+	if (method) {
+		(*method)();
+	}
+}
 
 #define wtf_suite_test(name)					\
 	if (suite->tests_count != 0) {				\
-		wtf_callfp_if_not_null(suite->after_each);	\
+		wtf_call_suite_method_if_not_null(suite->after_each);	\
 	}							\
 	wtf_test_t *test_##name = wtf_test_new(wtf_str(name));	\
 	wtf_test_suite_add_test(suite, test_##name);		\
-	wtf_callfp_if_not_null(suite->before_each);
+	wtf_call_suite_method_if_not_null(suite->before_each);
 
 
 
@@ -257,41 +260,60 @@ void wtf_context_add_suite(wtf_context_t *ctx, wtf_test_suite_t *suite) {
 
 void wtf_context_run_suites(wtf_context_t *ctx, int *success, int *failure) {
         if (ctx->suites_count == 1) {
-                printf("Running 1 suite...\n");
+                printf("Running 1 suite...\n\n");
 	}
         else {
-                printf("Running %d suites...\n", ctx->suites_count);
+                printf("Running %d suites...\n\n", ctx->suites_count);
 	}
 
         for (int i = 0; i < ctx->suites_count; ++i) {
-                printf("Suite '%s'\n", ctx->suites[i]->suite_name);
+                printf("===== Suite '%s' =====\n\n", ctx->suites[i]->suite_name);
 
                 (*ctx->suites[i]->runner)(ctx->suites[i]);
 
                 for (int j = 0; j < ctx->suites[i]->tests_count; ++j) {
                         wtf_test_t *test = ctx->suites[i]->tests[j];
-		
-			float assert_success_percentage =
-				(float)test->successful_assertions /
-				(test->successful_assertions + test->failed_assertions_count) * 100;
 
-                        printf("    [%s] Test '%s' (%.2f %%)\n",
+                        printf("    [%s] Test '%s'",
                                wtf_test_result_string(test->result),
-                               test->name,
-			       assert_success_percentage
+                               test->name
 			);
 
+#ifndef WTF_HIDE_SUCCESS_PERCENTAGE					
+			float assert_success_percentage =
+				(float)test->successful_assertions /
+				(test->successful_assertions + test->failed_assertions_count)
+				* 100;
+			printf(" (%.2f%% successful)\n",
+			       assert_success_percentage);
+#else
+			printf("\n");
+#endif
+
+#ifndef WTF_HIDE_FAILED_ASSERTIONS
 			if (test->failed_assertions_count > 0) {
 				printf("        Failed:\n");
 				for (int k = 0; k < test->failed_assertions_count; ++k) {
 					printf("        - %s\n", test->failed_assertions[k]);
 				}
 			}
+#endif
 
                         wtf_test_result_write_counter(test->result, success, failure);
                 }
                 printf("\n");
         }
+}
+
+void wtf_context_log_results(int success, int failure) {
+#ifndef WTF_HIDE_FINAL_TEST_RESULTS
+	printf("===== Final Test Results =====\n\n");
+	printf("Successful: %d\n"
+	       "Failed:     %d\n"
+	       "--------------\n"
+	       "Total:      %d\n",
+	       success, failure, success + failure);
+#endif
 }
 
 #define wtf_init()				\
@@ -308,11 +330,10 @@ void wtf_context_run_suites(wtf_context_t *ctx, int *success, int *failure) {
 #define wtf_register_after_each(name) \
 	wtf_test_suite_##name->after_each = test_suite_##name##_after_each
 
-#define wtf_run_suites()						\
-	int success = 0, failure = 0;					\
-	wtf_context_run_suites(ctx, &success, &failure);		\
-	printf("Successful: %d, Failed: %d, Total: %d\n",		\
-	       success, failure, success + failure)
+#define wtf_run_suites()					\
+	int success = 0, failure = 0;				\
+	wtf_context_run_suites(ctx, &success, &failure);	\
+	wtf_context_log_results(success, failure)
 
 #define wtf_destroy() \
 	wtf_context_destroy(ctx)

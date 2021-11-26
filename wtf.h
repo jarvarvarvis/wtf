@@ -336,7 +336,8 @@ void wtf_context_log_results(int success, int failure) {
 	wtf_context_log_results(success, failure)
 
 #define wtf_destroy() \
-	wtf_context_destroy(ctx)
+	wtf_context_destroy(ctx);		\
+	return failure > 0 ? 1 : 0
 
 #endif
 

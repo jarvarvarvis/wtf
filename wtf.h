@@ -245,8 +245,10 @@ wtf_context_t *wtf_context_new() {
 void wtf_context_destroy(wtf_context_t *ctx) {
 	for (int i = 0; i < ctx->suites_count; ++i) {
 		wtf_test_suite_destroy(ctx->suites[i]);
+		free(ctx->suites[i]);
 	}
 	free(ctx->suites);
+	free(ctx);
 }
 
 void wtf_context_add_suite(wtf_context_t *ctx, wtf_test_suite_t *suite) {

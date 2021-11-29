@@ -14,7 +14,7 @@ wtf_suite_after_each(some_struct) {
 	// Free the allocated data
 	if (test_struct) {
 		some_struct_destroy(test_struct);
-		free(test_struct);
+		test_struct = NULL;
 	}
 }
 
@@ -26,7 +26,7 @@ wtf_suite(some_struct) {
 		wtf_assert_streq(test_struct->string_value, "Value: 3878");
 	}
 
-	wtf_suite_test(add_fail) {
+        wtf_suite_test(add_fail) {
 		some_struct_add(test_struct, 128);
 
 		wtf_assert(test_struct->value > 1000);
@@ -41,6 +41,8 @@ wtf_suite(some_struct) {
 		wtf_assert_eq(test_struct->value, 0);
 		wtf_assert_null(test_struct->string_value);
 	}
+
+	wtf_finish_suite();
 }
 
 wtf_main {

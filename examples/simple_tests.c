@@ -22,12 +22,16 @@ wtf_suite(maths) {
 
 		wtf_assert_eq(result, expected);
 	}
+
+	wtf_finish_suite();
 }
 
 wtf_suite(null) {
 	wtf_suite_test(is_null) {
 		wtf_assert_null(NULL);
 	}
+
+        wtf_finish_suite();
 }
 
 wtf_suite(strings) {
@@ -38,6 +42,8 @@ wtf_suite(strings) {
 	wtf_suite_test(cmp_fail) {
 		wtf_assert_streq("Hello", "Helol");
 	}
+
+	wtf_finish_suite();
 }
 
 wtf_main {

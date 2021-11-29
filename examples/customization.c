@@ -10,6 +10,8 @@ wtf_suite(simple) {
 		wtf_assert_eq(69, 'E');
 		wtf_assert(1240 == 45889);
 	}
+
+	wtf_finish_suite();
 }
 
 wtf_main {

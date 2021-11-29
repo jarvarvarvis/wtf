@@ -75,6 +75,11 @@ wtf_test_t *wtf_test_new(char *name) {
 	return test;
 }
 
+void wtf_test_destroy(wtf_test_t *test) {
+	free(test->failed_assertions);
+	free(test);
+}
+
 #define wtf_assert(expr)						\
 	if (expr) {							\
 		wtf_test_suite_current_success(suite);			\
@@ -101,8 +106,8 @@ wtf_test_t *wtf_test_new(char *name) {
 
 ///// wtf Test Suites /////
 
-#ifndef WTF_TESTS_PER_SUITE
-#define WTF_TESTS_PER_SUITE 10
+#ifndef WTF_SUITE_TESTS_CAP_INCREMENT
+#define WTF_SUITE_TESTS_CAP_INCREMENT 20
 #endif
 
 struct wtf_test_suite;
@@ -115,6 +120,7 @@ struct wtf_test_suite {
 	char *suite_name;
   
 	unsigned int tests_count;
+	unsigned int tests_cap;
 	wtf_test_t **tests;
 
 	wtf_test_suite_method_t before_each;
@@ -129,7 +135,8 @@ wtf_test_suite_t *wtf_test_suite_new(char *suite_name, wtf_test_suite_runner_t r
 	wtf_test_suite_t *suite = (wtf_test_suite_t *)malloc(sizeof(wtf_test_suite_t));
 
 	suite->tests_count = 0;
-	suite->tests = (wtf_test_t **)malloc(WTF_TESTS_PER_SUITE * sizeof(wtf_test_t *));
+	suite->tests_cap = WTF_SUITE_TESTS_CAP_INCREMENT;
+	suite->tests = (wtf_test_t **)malloc(suite->tests_cap * sizeof(wtf_test_t *));
 	suite->suite_name = suite_name;
 	suite->runner = runner;
 
@@ -142,16 +149,17 @@ wtf_test_suite_t *wtf_test_suite_new(char *suite_name, wtf_test_suite_runner_t r
 
 void wtf_test_suite_destroy(wtf_test_suite_t *suite) {
 	for (int i = 0; i < suite->tests_count; ++i) {
-		free(suite->tests[i]);
+		wtf_test_destroy(suite->tests[i]);
 	}
 	free(suite->tests);
+	free(suite);
 }
 
 void wtf_test_suite_add_test(wtf_test_suite_t *suite, wtf_test_t *test) {
-	if (suite->tests_count >= WTF_TESTS_PER_SUITE) {
-		fprintf(stderr, "no more tests can be added to the suite '%s'\n",
-			suite->suite_name);
-		return;
+	if (suite->tests_count >= suite->tests_cap) {
+		suite->tests_cap += WTF_TEST_ASSERTIONS_CAP_INCREMENT;
+		suite->tests = (wtf_test_t **)realloc(suite->tests,
+						      suite->tests_cap * sizeof(wtf_test_t *));
 	}
 	suite->tests[suite->tests_count] = test;
 	suite->tests_count++;
@@ -160,10 +168,6 @@ void wtf_test_suite_add_test(wtf_test_suite_t *suite, wtf_test_t *test) {
 wtf_test_t *wtf_test_suite_current(wtf_test_suite_t *suite) {
 	if (suite->tests_count <= 0) {
 		return NULL;
-	}
-	if (suite->tests_count >= WTF_TESTS_PER_SUITE) {
-		fprintf(stderr, "more tests in suite '%s' than possible", suite->suite_name);
-		exit(-1);
 	}
 	return suite->tests[suite->tests_count - 1];
 }
@@ -208,6 +212,10 @@ void wtf_call_suite_method_if_not_null(wtf_test_suite_method_t method) {
 	wtf_test_suite_add_test(suite, test_##name);		\
 	wtf_call_suite_method_if_not_null(suite->before_each);
 
+#define wtf_finish_suite() \
+	if (suite->tests_count != 0) { \
+		wtf_call_suite_method_if_not_null(suite->after_each);	\
+	}
 
 
 ///// wtf Test Suites - Before and After Each /////
@@ -245,7 +253,6 @@ wtf_context_t *wtf_context_new() {
 void wtf_context_destroy(wtf_context_t *ctx) {
 	for (int i = 0; i < ctx->suites_count; ++i) {
 		wtf_test_suite_destroy(ctx->suites[i]);
-		free(ctx->suites[i]);
 	}
 	free(ctx->suites);
 	free(ctx);

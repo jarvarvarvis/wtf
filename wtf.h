@@ -53,13 +53,15 @@ typedef struct {
 	wtf_test_result_t result;
 
 	unsigned int successful_assertions;
-	unsigned int failed_assertions_count;
 
-	size_t failed_assertions_cap; 
+	unsigned int failed_assertions_count;
+	unsigned int failed_assertions_cap; 
 	char **failed_assertions;
 } wtf_test_t;
 
+#ifndef WTF_TEST_ASSERTIONS_CAP_INCREMENT
 #define WTF_TEST_ASSERTIONS_CAP_INCREMENT 20
+#endif
 
 wtf_test_t *wtf_test_new(char *name) {
 	wtf_test_t *test = (wtf_test_t *)malloc(sizeof(wtf_test_t));
@@ -231,12 +233,13 @@ void wtf_call_suite_method_if_not_null(wtf_test_suite_method_t method) {
 
 ///// wtf Context /////
 
-#ifndef WTF_SUITES_PER_CONTEXT
-#define WTF_SUITES_PER_CONTEXT 10
+#ifndef WTF_CONTEXT_SUITES_CAP_INCREMENT
+#define WTF_CONTEXT_SUITES_CAP_INCREMENT 20
 #endif
 
 typedef struct {
 	unsigned int suites_count;
+	unsigned int suites_cap;
 	wtf_test_suite_t **suites;
 } wtf_context_t;
 
@@ -244,7 +247,8 @@ wtf_context_t *wtf_context_new() {
 	wtf_context_t *ctx = (wtf_context_t *)malloc(sizeof(wtf_context_t));
 
 	ctx->suites_count = 0;
-	ctx->suites = (wtf_test_suite_t **)malloc(WTF_SUITES_PER_CONTEXT *
+	ctx->suites_cap = WTF_CONTEXT_SUITES_CAP_INCREMENT;
+	ctx->suites = (wtf_test_suite_t **)malloc(ctx->suites_cap *
 						  sizeof(wtf_test_suite_t *));
 
 	return ctx;
@@ -259,9 +263,9 @@ void wtf_context_destroy(wtf_context_t *ctx) {
 }
 
 void wtf_context_add_suite(wtf_context_t *ctx, wtf_test_suite_t *suite) {
-	if (ctx->suites_count >= WTF_SUITES_PER_CONTEXT) {
-		fprintf(stderr, "no more test suites can be added to the context\n");
-		return;
+	if (ctx->suites_count >= ctx->suites_cap) {
+		ctx->suites_cap += WTF_CONTEXT_SUITES_CAP_INCREMENT;
+		ctx->suites = (wtf_test_suite_t **) realloc(ctx->suites, ctx->suites_cap * sizeof(wtf_test_suite_t *));
 	}
 	ctx->suites[ctx->suites_count] = suite;
 	ctx->suites_count++;

@@ -1,6 +1,10 @@
 #ifndef _WTF_H
 #define _WTF_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -351,6 +355,10 @@ void wtf_context_log_results(int success, int failure) {
 #define wtf_destroy() \
 	wtf_context_destroy(ctx);		\
 	return failure > 0 ? 1 : 0
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
